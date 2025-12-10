@@ -1,10 +1,10 @@
 use alloy_primitives::hex::encode_prefixed;
-pub use alloy_primitives::U256;
+pub use alloy_primitives::{Address, U256};
 use alloy_signer_local::PrivateKeySigner;
 pub use anyhow::{anyhow, Context, Result as ClientResult};
 use config::get_contract_config;
-use orders::OrderBuilder;
-use orders::SignedOrderRequest;
+use orders::{OrderBuilder};
+pub use orders::{SignedOrderRequest, SigType};
 use reqwest::header::HeaderName;
 use reqwest::Client;
 use reqwest::Method;
@@ -49,18 +49,33 @@ impl ClobClient {
             ..Default::default()
         }
     }
-    pub fn with_l1_headers(host: &str, key: &str, chain_id: u64) -> Self {
+    pub fn with_l1_headers(host: &str, key: &str, chain_id: u64, sig_type: Option<u8>, funder: Option<String>) -> Self {
         let signer = Box::new(
             key.parse::<PrivateKeySigner>()
                 .expect("Invalid private key"),
         );
+        
+        let sig_type_enum = sig_type.map(|st| {
+            match st {
+                0 => SigType::Eoa,
+                1 => SigType::PolyProxy,
+                2 => SigType::PolyGnosisSafe,
+                _ => panic!("Invalid signature type: {}", st),
+            }
+        });
+        
+        let funder_address = funder.map(|f| {
+            f.parse::<Address>()
+                .expect("Invalid funder address")
+        });
+        
         Self {
             host: host.to_owned(),
             http_client: Client::new(),
             signer: Some(signer.clone()),
             chain_id: Some(chain_id),
             api_creds: None,
-            order_builder: Some(OrderBuilder::new(signer, None, None)),
+            order_builder: Some(OrderBuilder::new(signer, sig_type_enum, funder_address)),
         }
     }
 
